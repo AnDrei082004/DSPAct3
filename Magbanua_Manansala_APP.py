@@ -8,7 +8,6 @@ import scipy.io.wavfile as wavfile
 import scipy.fftpack as fftpk
 import os
 
-
 class VoiceRecorder:
     def __init__(
         self,
@@ -24,14 +23,11 @@ class VoiceRecorder:
         self.pa = pyaudio.PyAudio()
         self.stream = None
         self.frames = []
-        self.is_recording = False
-        self.is_paused = False
         self.record_thread = None
         self.recording_finished_event = threading.Event()
 
     def recordSignal(self, duration=5.0, sample_rate=44100):
         self.is_recording = True
-        self.is_paused = False
         self.frames = []
         self.recording_finished_event.clear()
         self.sample_rate = sample_rate
@@ -44,22 +40,18 @@ class VoiceRecorder:
                 input=True,
                 frames_per_buffer=self.frames_per_buffer,
             )
-            # print("Recording started")
             print("\033[96m" + "Recording started." + "\033[0m")
             second_tracking = 0
             second_count = 0
             try:
                 while self.is_recording and second_count < duration:
-                    if not self.is_paused:
-                        data = self.stream.read(self.frames_per_buffer)
-                        self.frames.append(data)
-                        second_tracking += 1
-                        if second_tracking == int(self.rate / self.frames_per_buffer):
-                            second_count += 1
-                            second_tracking = 0
-                            print(f"Time Left: {duration + - second_count} seconds")
-                    else:
-                        time.sleep(0.1)
+                    data = self.stream.read(self.frames_per_buffer)
+                    self.frames.append(data)
+                    second_tracking += 1
+                    if second_tracking == int(self.rate / self.frames_per_buffer):
+                        second_count += 1
+                        second_tracking = 0
+                        print(f"Time Left: {duration - second_count} seconds")
                 print("Recording finished, time limit reached.")
 
             except Exception as e:
@@ -76,7 +68,6 @@ class VoiceRecorder:
         self.record_thread.start()
 
     def saveRecording0ne(self, filename="record1.wav"):
-        # print("Recording 1 saved.")
         print("\033[91m" + "Recording 1 saved." + "\033[0m")
         obj = wave.open(filename, "wb")
         obj.setnchannels(self.channels)
@@ -86,7 +77,6 @@ class VoiceRecorder:
         obj.close()
 
     def saveRecordingTwo(self, filename="record2.wav"):
-        # print("Recording 2 saved.")
         print("\033[91m" + "Recording 2 saved." + "\033[0m")
         obj = wave.open(filename, "wb")
         obj.setnchannels(self.channels)
@@ -104,6 +94,7 @@ class VoiceRecorder:
 
     def computeFFT(self, sample_rate=None):
         self.composite_signal = self.signal1 + self.signal2
+
         self.FFT1 = abs(fftpk.fft(self.signal1))
         self.FFT2 = abs(fftpk.fft(self.signal2))
         self.FFT_composite = abs(fftpk.fft(self.composite_signal))
@@ -206,14 +197,22 @@ class VoiceRecorder:
         oscilloscope_figure.savefig(filename, format="jpeg")
         print(f"Oscilloscope graph saved as {filename}")
 
-    def readAndPlotWAV(self, filename1, filename2):
+    def readAndPlotWAV(self, filename1, filename2, sample_rate=None):
         self.s_rate1, self.signal1 = wavfile.read(filename1)
         self.s_rate2, self.signal2 = wavfile.read(filename2)
         self.min_length = min(len(self.signal1), len(self.signal2))
         self.signal1 = self.signal1[: self.min_length]
         self.signal2 = self.signal2[: self.min_length]
 
-        self.computeFFT()
+        self.composite_signal = self.signal1 + self.signal2
+
+        self.FFT1 = abs(fftpk.fft(self.signal1))
+        self.FFT2 = abs(fftpk.fft(self.signal2))
+        self.FFT_composite = abs(fftpk.fft(self.composite_signal))
+
+        if sample_rate is None:
+            sample_rate = self.s_rate1
+        self.freqs = fftpk.fftfreq(len(self.FFT1), (1.0 / sample_rate))
 
     def __del__(self):
         self.pa.terminate()

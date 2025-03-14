@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import os
+from threading import Thread
+import time
 from themes.theme import Theme
 from CTkMessagebox import CTkMessagebox as mb
 from PIL import Image, ImageSequence
@@ -19,11 +21,10 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             family="Poppins",
         )
         self.parent.title("Voice Recorder")
-        self.parent.geometry("1100x650")
+        self.parent.geometry("1150x650")
         self.recorder = VoiceRecorder()
         self.is_theme_open = False
         self.is_darked = False
-        self.is_paused = False
         self.track_button = 1
 
         self.parent.columnconfigure(0, weight=1)
@@ -43,6 +44,12 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             fg_color="transparent",
         )
         self.hero_frame.place(x=360, y=70)
+        self.theme_frame = ctk.CTkFrame(
+            self.frame,
+            corner_radius=8,
+            width=250,
+            height=450,
+        )
         self.theme_icon = ctk.CTkImage(
             light_image=Image.open("icons/theme.png"),
             dark_image=Image.open("icons/theme_dark.png"),
@@ -154,7 +161,7 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             height=40,
             width=60,
             corner_radius=4,
-            state="normal",
+            state="disabled",
             command=self.startRecordingTwo,
         )
         self.badge1 = ctk.CTkLabel(
@@ -181,32 +188,6 @@ class VoiceRecorderGUI(ctk.CTkFrame):
         self.record_btn2.place(x=160, y=115, anchor="w")
         self.badge1.place(x=114, y=124, anchor="w")
         self.badge2.place(x=229, y=124, anchor="w")
-        self.save_button = ctk.CTkButton(
-            self.frame,
-            image=self.save_icon,
-            text="Save",
-            compound="left",
-            text_color=["white", "black"],
-            text_color_disabled=["white", "black"],
-            font=(self.poppins, 14, "bold"),
-            height=40,
-            width=145,
-            corner_radius=4,
-            state="disabled",
-            command=self.saveRecordOneAndTwo,
-        )
-        self.check = ctk.CTkLabel(
-            self.frame,
-            text="1",
-            text_color="white",
-            font=(self.poppins, 12, "bold"),
-            fg_color="#FF6505",
-            bg_color="#FF6505",
-            height=20,
-            width=20,
-        )
-        self.save_button.place(x=45, y=185, anchor="w")
-        self.check.place(x=164, y=190, anchor="w")
 
         self.plot_button = ctk.CTkButton(
             self.frame,
@@ -219,22 +200,8 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             height=40,
             width=145,
             corner_radius=4,
-            state="normal",
+            state="disabled",
             command=self.showPlot,
-        )
-        self.upload_button = ctk.CTkButton(
-            self.frame,
-            image=self.upload_icon,
-            text="Upload",
-            compound="left",
-            text_color=["white", "black"],
-            text_color_disabled=["white", "black"],
-            font=(self.poppins, 14, "bold"),
-            height=40,
-            width=145,
-            corner_radius=4,
-            state="normal",
-            command=self.uploadWavFile,
         )
         self.save_graph = ctk.CTkButton(
             self.frame,
@@ -250,9 +217,9 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             state="disabled",
             command=self.saveGraph,
         )
-        self.plot_button.place(x=45, y=255, anchor="w")
-        self.upload_button.place(x=45, y=325, anchor="w")
-        self.save_graph.place(x=45, y=395, anchor="w")
+        self.plot_button.place(x=45, y=185, anchor="w")
+        # self.upload_button.place(x=45, y=255, anchor="w")
+        self.save_graph.place(x=45, y=255, anchor="w")
 
         self.current_frame = 0
         self.gif_running = False
@@ -282,24 +249,6 @@ class VoiceRecorderGUI(ctk.CTkFrame):
         )
         self.oscilloscope_frame.pack(fill=ctk.BOTH, expand=True)
         self.tabview.place_forget()
-        
-        self.upload_tab_view = ctk.CTkTabview(
-            self.frame,
-            width=600,
-            height=450,
-            anchor="ne",
-        )
-        self.upload_tab_view.add("Spectrum Analyzer")
-        self.upload_tab_view.add("Oscilloscope")
-        self.upload_spectrum_frame = ctk.CTkFrame(
-            self.upload_tab_view.tab("Spectrum Analyzer"), fg_color="transparent"
-        )
-        self.upload_spectrum_frame.pack(fill=ctk.BOTH, expand=True)
-        self.upload_oscilloscope_frame = ctk.CTkFrame(
-            self.upload_tab_view.tab("Oscilloscope"), fg_color="transparent"
-        )
-        self.upload_oscilloscope_frame.pack(fill=ctk.BOTH, expand=True)
-        self.upload_tab_view.place_forget()
         
         self.theme_frame = ctk.CTkFrame(
             self.frame,
@@ -524,76 +473,54 @@ class VoiceRecorderGUI(ctk.CTkFrame):
         )
         self.yellow.place(relx=0.2, rely=0.58, anchor="n")
         self.theme = Theme(
-            self.theme_button, self.dark_button, self.frame, self.theme_frame, self.record_btn1, self.record_btn2, self.save_button, self.plot_button, self.upload_button, self.save_graph, self.tabview, self.upload_tab_view 
+            self.theme_button, self.dark_button, self.frame, self.theme_frame, self.record_btn1, self.record_btn2, self.plot_button, self.save_graph, self.tabview
         )
-        
+
     def startRecordingOne(self):
+        self.resetView()
         self.recorder.recordSignal()
         mb(title="Start", message="Recording 1 has started.")
-        if not self.gif_running:
-            self.gif_running = True
-            self.animateWave()
-        self.is_paused = False
+        self.gif_running = True
         self.animateWave()
-        self.save_button.configure(state="normal", text="Save")
-        # self.plot_button.configure(state="disabled")
-        self.record_btn2.configure(state="disabled")
-        self.track_button = 1
+        Thread(target=self.changeBadgeColor, args=(self.badge1,)).start()
+        Thread(target=self.trackRecordingOne).start()
 
     def startRecordingTwo(self):
+        self.recorder.saveRecording0ne()
         self.recorder.recordSignal()
         mb(title="Start", message="Recording 2 has started.")
-        if not self.gif_running:
-            self.gif_running = True
-            self.animateWave()
-        self.is_paused = False
+        self.gif_running = True
         self.animateWave()
-        self.save_button.configure(state="normal", text="Save")
-        # self.plot_button.configure(state="disabled")
-        self.track_button = 2
+        Thread(target=self.changeBadgeColor, args=(self.badge2,)).start()
+        Thread(target=self.trackRecordingTwo).start()
 
-    def saveRecordOneAndTwo(self):
-        if self.track_button == 2:
-            mb(
-                title="Recording Saved",
-                message="Record 2 save successfully.",
-                icon="check",
-                option_1="OK",
-            )
-            self.recorder.saveRecordingTwo()
-            self.save_button.configure(
-                text="Save",
-                image=self.save_icon,
-            )
-            self.check.configure(text="1")
-            self.plot_button.configure(state="normal")
-            self.upload_button.configure(state="normal")
-            self.save_graph.configure(state="normal")
+    def changeBadgeColor(self, badge):
+        time.sleep(5)
+        badge.configure(fg_color="green", bg_color="green")
 
-            self.record_btn2.configure(state="disabled")
-            self.badge2.configure(fg_color="green", bg_color="green")
-            self.is_paused = True
+    def trackRecordingOne(self):
+        time.sleep(5)
+        self.record_btn2.configure(state="normal")
+        self.plot_button.configure(state="disabled")
+        self.record_btn1.configure(state="disabled")
 
-        else:
-            mb(
-                title="Recording Saved",
-                message="Record 1 save successfully.",
-                icon="check",
-                option_1="OK",
-            )
-            self.recorder.saveRecording0ne()
-            self.save_button.configure(text="Save", image=self.save_icon)
-            self.check.configure(text="2")
-            self.record_btn2.configure(state="normal")
-            self.record_btn1.configure(state="disabled")
-            self.badge1.configure(fg_color="green", bg_color="green")
-            self.is_paused = True
+    def trackRecordingTwo(self):
+        time.sleep(5)
+        self.record_btn1.configure(state="normal")
+        self.plot_button.configure(state="normal")
+        self.record_btn2.configure(state="disabled")
 
     def showPlot(self):
+        self.gif_running = False
         self.hero_frame.forget()
+        self.recorder.saveRecordingTwo()
+        self.save_graph.configure(state="normal")
+        self.badge1.configure(fg_color="red", bg_color="red")
+        self.badge2.configure(fg_color="red", bg_color="red")
+
         mb(
             title="Plot Graph",
-            message="Graph plotted successful.",
+            message="Graph plotted successfully.",
             icon="check",
             option_1="OK",
         )
@@ -601,18 +528,9 @@ class VoiceRecorderGUI(ctk.CTkFrame):
         self.plotSpectrum()
         self.plotOscilloscope()
         self.tabview.set("Spectrum Analyzer")
-    
-    def showPlotWAVFiles(self, filename1, filename2):
-        self.hero_frame.forget()
-        self.tabview.place_destroy()
-        self.upload_tab_view.place(x=278, y=75)
-        self.recorder.readAndPlotWAV(filename1, filename2)
-        self.uploadPlotSpectrum()
-        self.uploadPlotOscilloscope()
-        self.upload_tab_view.set("Spectrum Analyzer")
 
     def plotSpectrum(self):
-        self.hero.destroy()
+        # self.hero.destroy()
         for widget in self.spectrum_frame.winfo_children():
             widget.destroy()
 
@@ -629,7 +547,7 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             self.spectrum_frame.pack(fill=ctk.BOTH, expand=True)
 
     def plotOscilloscope(self):
-        self.hero.destroy()
+        # self.hero.destroy()
         for widget in self.oscilloscope_frame.winfo_children():
             widget.destroy()
 
@@ -645,76 +563,6 @@ class VoiceRecorderGUI(ctk.CTkFrame):
             toolbar.pack(fill=ctk.BOTH, expand=True)
 
             self.oscilloscope_frame.pack(fill=ctk.BOTH, expand=True)
-            
-    def uploadPlotSpectrum(self):
-        self.hero.destroy()
-        self.tabview.place_forget()
-        for widget in self.upload_spectrum_frame.winfo_children():
-            widget.destroy()
-
-        spectrum_fig = self.recorder.plotSpectrum()
-
-        if spectrum_fig:
-            canvas = FigureCanvasTkAgg(spectrum_fig, master=self.upload_spectrum_frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=ctk.BOTH, expand=True)
-
-            toolbar = NavigationToolbar2Tk(canvas, self.upload_spectrum_frame)
-            toolbar.update()
-            toolbar.pack(fill=ctk.BOTH, expand=True)
-            self.upload_spectrum_frame.pack(fill=ctk.BOTH, expand=True)
-
-    def uploadPlotOscilloscope(self):
-        self.hero.destroy()
-        self.tabview.place_forget()
-        for widget in self.upload_oscilloscope_frame.winfo_children():
-            widget.destroy()
-
-        oscilloscope_fig = self.recorder.plotOscilloscope()
-
-        if oscilloscope_fig:
-            canvas = FigureCanvasTkAgg(
-                oscilloscope_fig, master=self.upload_oscilloscope_frame
-            )
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=ctk.BOTH, expand=True)
-
-            toolbar = NavigationToolbar2Tk(canvas, self.upload_oscilloscope_frame)
-            toolbar.update()
-            toolbar.pack(fill=ctk.BOTH, expand=True)
-
-            self.upload_oscilloscope_frame.pack(fill=ctk.BOTH, expand=True)
-
-    def uploadWavFile(self):
-        file_paths = filedialog.askopenfilenames(
-            initialdir="../voice_recorder-main",
-            filetypes=[("WAV files", "*.wav")],
-            title="Select WAV files",
-        )
-        if len(file_paths) == 1:
-            mb(
-                title="Error",
-                message="Please select two(2) WAV files.",
-                icon="warning",
-                option_1="OK",
-            )
-        elif len(file_paths) == 2:
-            file1 = os.path.basename(file_paths[0])
-            file2 = os.path.basename(file_paths[1])
-            mb(
-                title="Upload WAV",
-                message=f"WAV Files {file1} and {file2} uploaded successfully.",
-                icon="check",
-                option_1="OK",
-            )
-            self.showPlotWAVFiles(filename1=file_paths[0], filename2=file_paths[1])
-        else:
-            mb(
-                title="Error",
-                message="Please select two(2) WAV files",
-                icon="cancel",
-                option_1="OK",
-            )
 
     def saveGraph(self):
         mb(
@@ -737,19 +585,24 @@ class VoiceRecorderGUI(ctk.CTkFrame):
         self.is_darked = not self.is_darked
 
     def animateWave(self):
-        if not self.is_paused and self.gif_running:
+        if self.gif_running:
             self.hero.configure(image=self.frames[self.current_frame])
             self.current_frame = (self.current_frame + 1) % len(self.frames)
             self.after(100, self.animateWave)
-            
+
+    def resetView(self):
+        if self.tabview.winfo_exists():
+            self.tabview.place_forget()
+        self.gif_running = True
+
     def toggleThemeFrame(self):
         if self.is_theme_open:
             self.theme_frame.place_forget()
         else:
-            self.theme_frame.place(relx=0.98, rely=0.16, anchor="ne")  # Show the frame
+            self.theme_frame.place(relx=0.98, rely=0.16, anchor="ne")
 
         self.is_theme_open = not self.is_theme_open
-    
+
     def setAutumnTheme(self):
         self.theme.autumn()
 
@@ -776,34 +629,34 @@ class VoiceRecorderGUI(ctk.CTkFrame):
 
     def setMetalTheme(self):
         self.theme.metal()
-    
+
     def setMidnightTheme(self):
         self.theme.midnight()
-    
+
     def setPatinaTheme(self):
         self.theme.patina()
-    
+
     def setOrangeTheme(self):
         self.theme.orange()
-        
+
     def setPinkTheme(self):
         self.theme.pink()
-    
+
     def setRedTheme(self):
         self.theme.red()
-    
+
     def setRimeTheme(self):
         self.theme.rime()
-        
+
     def setRoseTheme(self):
         self.theme.rose()
-    
+
     def setSkyTheme(self):
         self.theme.sky()
-    
+
     def setVioletTheme(self):
         self.theme.violet()
-        
+
     def setYellowTheme(self):
         self.theme.yellow()
 
